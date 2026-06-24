@@ -1,0 +1,497 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kanken 分配シミュレーション 2026</title>
+    <!-- Tailwind CSS (CDN) -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Chart.js (CDN) -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    
+    <!-- バックエンドが生成したデータ -->
+    <script src="dashboard_data.js"></script>
+
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #F3F4F6;
+            color: #1F2937;
+        }
+        .glass-card {
+            background: rgba(255, 255, 255, 0.85);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
+            border-radius: 1rem;
+        }
+        .transition-all {
+            transition-property: all;
+            transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+            transition-duration: 300ms;
+        }
+        /* スクロールバー装飾 */
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: #f1f1f1; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+    </style>
+</head>
+<body class="min-h-screen p-4 md:p-8">
+
+    <div class="max-w-7xl mx-auto">
+        <!-- ヘッダー -->
+        <header class="flex justify-between items-center mb-8">
+            <div>
+                <h1 class="text-3xl font-bold tracking-tight text-gray-900">Kanken 分配シミュレーション 2026</h1>
+                <p class="text-gray-500 mt-1">「年末まで在庫を持たせるため」の月間分配上限コントロールと店舗配分</p>
+            </div>
+            <div class="flex items-center space-x-2 bg-white px-4 py-2 rounded-full shadow-sm border border-gray-200">
+                <span class="w-3 h-3 bg-green-500 rounded-full animate-pulse"></span>
+                <span class="text-sm font-medium text-gray-600">データ連携済み</span>
+            </div>
+        </header>
+
+        <div class="grid grid-cols-1 lg:grid-cols-4 gap-6">
+            
+            <!-- 左サイドパネル：コントロール -->
+            <div class="lg:col-span-1 space-y-6">
+                <!-- 商品選択カード -->
+                <div class="glass-card p-6">
+                    <h2 class="text-lg font-semibold mb-4">🎨 商品を選択</h2>
+                    <select id="colorSelect" class="w-full bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-2.5 outline-none transition-all hover:border-blue-400 cursor-pointer">
+                        <!-- JSで動的に追加 -->
+                    </select>
+                </div>
+
+                <!-- 分配コントロールパネル（シミュレーション） -->
+                <div class="glass-card p-6 border-l-4 border-blue-500">
+                    <div class="flex items-center justify-between mb-2">
+                        <h2 class="text-lg font-semibold">⚙️ 月間分配上限の設定</h2>
+                        <span class="bg-blue-100 text-blue-800 text-xs font-medium px-2.5 py-0.5 rounded">シミュレーション</span>
+                    </div>
+                    <p class="text-sm text-gray-500 mb-6">年末(12月末)に店頭在庫を切らさないための、毎月の出荷上限を決定します。</p>
+                    
+                    <!-- 指標サマリー -->
+                    <div class="bg-gray-50 p-3 rounded-lg mb-4 text-sm border border-gray-200">
+                        <div class="flex justify-between mb-2 pb-2 border-b border-gray-200">
+                            <span class="text-gray-600">本来の月間需要 (予測):</span>
+                            <span id="monthlyDemand" class="font-bold text-gray-900">0 個/月</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-gray-600">年末まで持たせる限界:</span>
+                            <span id="monthlyLimit" class="font-bold text-red-600">0 個/月</span>
+                        </div>
+                    </div>
+
+                    <!-- スライダー -->
+                    <div class="mb-6">
+                        <div class="flex justify-between items-end mb-2">
+                            <label for="allocationSlider" class="block text-sm font-medium text-gray-700">毎月の出荷設定</label>
+                            <span id="allocationValue" class="text-2xl font-bold text-blue-600">0 個/月</span>
+                        </div>
+                        <input id="allocationSlider" type="range" min="0" max="100" value="100" class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer">
+                        <div class="flex justify-between text-xs text-gray-400 mt-1">
+                            <span>0 個</span>
+                            <span id="sliderMaxLabel">最大</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 右メインパネル：KPIとグラフとテーブル -->
+            <div class="lg:col-span-3 space-y-6">
+                <!-- KPIカード群 -->
+                <div class="grid grid-cols-2 md:grid-cols-5 gap-3">
+                    <div class="glass-card p-4">
+                        <p id="label-actual" class="text-xs font-medium text-gray-500">1-5月実績</p>
+                        <p id="kpi-actual" class="text-xl font-bold text-gray-900 mt-1">0</p>
+                    </div>
+                    <div class="glass-card p-4">
+                        <p id="label-demand" class="text-xs font-medium text-gray-500">6-12月売上予測</p>
+                        <p id="kpi-demand" class="text-xl font-bold text-gray-900 mt-1">0</p>
+                    </div>
+                    <div class="glass-card p-4">
+                        <p class="text-xs font-medium text-gray-500">期首在庫 (<span id="stock-date-display">6月1日</span>)</p>
+                        <p id="kpi-stock" class="text-xl font-bold text-gray-900 mt-1">0</p>
+                    </div>
+                    <div class="glass-card p-4">
+                        <p class="text-xs font-medium text-gray-500">FW入荷予定</p>
+                        <p id="kpi-arrival" class="text-xl font-bold text-gray-900 mt-1">0</p>
+                    </div>
+                    <div class="glass-card p-4 relative overflow-hidden group">
+                        <div class="relative z-10">
+                            <p class="text-xs font-medium text-gray-500">12月末 予想在庫</p>
+                            <div class="flex items-baseline space-x-1 mt-1">
+                                <p id="kpi-forecast" class="text-2xl font-extrabold text-gray-900">0</p>
+                                <span class="text-xs text-gray-500">個</span>
+                            </div>
+                        </div>
+                        <div id="forecast-bg" class="absolute inset-0 bg-gray-50 opacity-20 transition-colors duration-500 z-0"></div>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    <!-- グラフエリア -->
+                    <div class="glass-card p-6">
+                        <h3 id="chart-title-gap" class="text-lg font-semibold text-gray-800 mb-4">📊 供給と需要のギャップ比較 (6-12月)</h3>
+                        <div class="relative h-64 w-full">
+                            <canvas id="gapChart"></canvas>
+                        </div>
+                    </div>
+
+                    <!-- 店舗別配分テーブル -->
+                    <div class="glass-card p-6 flex flex-col h-full">
+                        <div class="flex justify-between items-center mb-4">
+                            <h3 class="text-lg font-semibold text-gray-800">🏪 店舗別 月間配分数 (シミュレーション)</h3>
+                            <span class="bg-gray-100 text-gray-600 text-xs px-2 py-1 rounded">端数調整済</span>
+                        </div>
+                        <div class="flex-grow overflow-auto" style="max-height: 256px;">
+                            <table class="min-w-full text-sm text-left text-gray-500">
+                                <thead class="text-xs text-gray-700 uppercase bg-gray-50 sticky top-0">
+                                    <tr>
+                                        <th scope="col" class="px-4 py-2 rounded-tl-lg">店舗名 (拠点)</th>
+                                        <th scope="col" class="px-4 py-2 text-right">構成比</th>
+                                        <th scope="col" class="px-4 py-2 text-right rounded-tr-lg">配分数 (個/月)</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="storeTableBody">
+                                    <!-- JSで動的に追加 -->
+                                </tbody>
+                                <tfoot class="bg-gray-50 sticky bottom-0 font-bold text-gray-900">
+                                    <tr>
+                                        <td class="px-4 py-2">合計</td>
+                                        <td class="px-4 py-2 text-right">100%</td>
+                                        <td class="px-4 py-2 text-right text-blue-600" id="storeTableTotal">0</td>
+                                    </tr>
+                                </tfoot>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="glass-card p-6">
+                    <h3 class="text-lg font-semibold text-gray-800 mb-4">⚠️ 要注意カラーランキング (総供給に対する不足数 ワースト10)</h3>
+                    <div class="relative h-48 w-full">
+                        <canvas id="rankingChart"></canvas>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <script>
+        let rawData = [];
+        let baseShares = [];
+        let metaData = {};
+
+        try {
+            if (typeof dashboardData !== 'undefined') {
+                if (dashboardData.summary && dashboardData.base_shares) {
+                    rawData = dashboardData.summary;
+                    baseShares = dashboardData.base_shares;
+                    metaData = dashboardData.meta || {};
+                } else {
+                    // 旧フォーマット互換
+                    rawData = dashboardData;
+                }
+            }
+        } catch(e) {
+            console.error(e);
+        }
+
+        let gapChartInstance = null;
+        let rankingChartInstance = null;
+
+        let state = {
+            selectedColor: null,
+            monthlyAllocation: 0 
+        };
+
+        const selectEl = document.getElementById('colorSelect');
+        const sliderEl = document.getElementById('allocationSlider');
+        const sliderValEl = document.getElementById('allocationValue');
+        const sliderMaxLabel = document.getElementById('sliderMaxLabel');
+        
+        const monthlyDemandEl = document.getElementById('monthlyDemand');
+        const monthlyLimitEl = document.getElementById('monthlyLimit');
+
+        const kpiActual = document.getElementById('kpi-actual');
+        const kpiDemand = document.getElementById('kpi-demand');
+        const kpiStock = document.getElementById('kpi-stock');
+        const kpiArrival = document.getElementById('kpi-arrival');
+        const kpiForecast = document.getElementById('kpi-forecast');
+        const forecastBg = document.getElementById('forecast-bg');
+
+        function init() {
+            if(rawData.length === 0) return;
+
+            // 日付と期間の動的反映
+            const stockDateDisplay = document.getElementById('stock-date-display');
+            if(stockDateDisplay && metaData.stock_date) {
+                stockDateDisplay.textContent = metaData.stock_date;
+            }
+            
+            const actualMonths = metaData.actual_months || 5;
+            document.getElementById('label-actual').textContent = `1-${actualMonths}月実績`;
+            if(actualMonths < 12) {
+                document.getElementById('label-demand').textContent = `${actualMonths+1}-12月売上予測`;
+                document.getElementById('chart-title-gap').textContent = `📊 供給と需要のギャップ比較 (${actualMonths+1}-12月)`;
+            } else {
+                document.getElementById('label-demand').textContent = `売上予測 (期間なし)`;
+                document.getElementById('chart-title-gap').textContent = `📊 供給と需要のギャップ比較`;
+            }
+
+            // ランキング表示などのために不足数を計算
+            rawData.forEach(d => {
+                const stock = d["期首在庫"] || d["期首在庫(6月1日)"] || 0;
+                const arrival = d["FW入荷予定"] || 0;
+                const demand = d["残り需要予測(現実ベース)"] || d["6-12月需要予測(現実ベース)"] || 0;
+                d["不足数"] = (stock + arrival) - demand;
+            });
+
+            // 不足数が大きい順（マイナスが大きい順）にソートしてセレクトボックス生成
+            const sortedData = [...rawData].sort((a,b) => (a["不足数"] || 0) - (b["不足数"] || 0));
+            
+            // 実績がある、または入荷予定がある色のみにフィルタリング（廃番色を除外）
+            const filteredData = sortedData.filter(item => {
+                if(item["カラー名"] === "nan" || !item["カラー名"]) return false;
+                const actual = item["累計実績(販売数)"] || item["1-5月実績(販売数)"] || 0;
+                const arrival = item["FW入荷予定"] || 0;
+                return (actual > 0 || arrival > 0);
+            });
+            
+            filteredData.forEach((item, index) => {
+                const option = document.createElement('option');
+                option.value = item["カラー名"];
+                option.textContent = item["カラー名"];
+                selectEl.appendChild(option);
+                
+                if(index === 0 && !state.selectedColor) {
+                    state.selectedColor = item["カラー名"];
+                }
+            });
+
+            selectEl.addEventListener('change', (e) => {
+                state.selectedColor = e.target.value;
+                initSliderForColor();
+                updateDashboard();
+            });
+
+            sliderEl.addEventListener('input', (e) => {
+                state.monthlyAllocation = parseInt(e.target.value);
+                sliderValEl.textContent = state.monthlyAllocation + ' 個/月';
+                updateDashboard();
+            });
+
+            drawRankingChart();
+            initSliderForColor();
+            updateDashboard();
+        }
+
+        function getSelectedData() {
+            return rawData.find(d => d["カラー名"] === state.selectedColor) || null;
+        }
+
+        function initSliderForColor() {
+            const data = getSelectedData();
+            if(!data) return;
+
+            const stock = data["期首在庫"] || data["期首在庫(6月1日)"] || 0;
+            const arrival = data["FW入荷予定"] || 0;
+            const rawDemand = data["残り需要予測(現実ベース)"] || data["6-12月需要予測(現実ベース)"] || 0;
+            const remainMonths = metaData.remain_months || 7;
+
+            const supplyTotal = stock + arrival;
+            // 1ヶ月あたりの予測需要
+            const monthlyDemand = remainMonths > 0 ? Math.ceil(rawDemand / remainMonths) : 0;
+            const monthlyLimit = remainMonths > 0 ? Math.floor(supplyTotal / remainMonths) : supplyTotal;
+
+            monthlyDemandEl.textContent = monthlyDemand.toLocaleString() + ' 個/月';
+            monthlyLimitEl.textContent = monthlyLimit.toLocaleString() + ' 個/月';
+
+            sliderEl.max = monthlyDemand;
+            state.monthlyAllocation = monthlyDemand;
+            sliderEl.value = state.monthlyAllocation;
+            
+            sliderValEl.textContent = state.monthlyAllocation + ' 個/月';
+            sliderMaxLabel.textContent = monthlyDemand + ' 個';
+        }
+
+        function updateDashboard() {
+            const data = getSelectedData();
+            if(!data) return;
+
+            const actual = Math.round(data["累計実績(販売数)"] || data["1-5月実績(販売数)"] || 0);
+            const stock = Math.round(data["期首在庫"] || data["期首在庫(6月1日)"] || 0);
+            const arrival = Math.round(data["FW入荷予定"] || 0);
+            const rawDemand = data["残り需要予測(現実ベース)"] || data["6-12月需要予測(現実ベース)"] || 0;
+            const remainMonths = metaData.remain_months || 7;
+
+            const adjustedDemand = state.monthlyAllocation * remainMonths;
+            const forecast = stock + arrival - adjustedDemand;
+
+            kpiActual.textContent = actual.toLocaleString();
+            kpiDemand.textContent = Math.round(rawDemand).toLocaleString();
+            kpiStock.textContent = stock.toLocaleString();
+            kpiArrival.textContent = arrival.toLocaleString();
+            kpiForecast.textContent = forecast.toLocaleString();
+
+            if (forecast < 0) {
+                kpiForecast.classList.remove('text-gray-900', 'text-blue-600');
+                kpiForecast.classList.add('text-red-600');
+                forecastBg.className = 'absolute inset-0 bg-red-100 opacity-50 transition-colors duration-500 z-0';
+            } else {
+                kpiForecast.classList.remove('text-gray-900', 'text-red-600');
+                kpiForecast.classList.add('text-blue-600');
+                forecastBg.className = 'absolute inset-0 bg-blue-50 opacity-50 transition-colors duration-500 z-0';
+            }
+
+            updateGapChart(stock, arrival, rawDemand, adjustedDemand);
+            
+            // 店舗配分テーブルの更新 (Hare-Niemeyer法による端数調整)
+            renderStoreAllocations(state.monthlyAllocation);
+        }
+
+        // 端数調整アルゴリズム (最大剰余方式) を用いて店舗配分を計算し描画する
+        function renderStoreAllocations(totalAllocation) {
+            const tbody = document.getElementById('storeTableBody');
+            const tfootTotal = document.getElementById('storeTableTotal');
+            tbody.innerHTML = '';
+            
+            if (!baseShares || baseShares.length === 0 || totalAllocation === 0) {
+                tfootTotal.textContent = '0';
+                return;
+            }
+
+            // Step 1: 構成比を掛けて「整数部分」と「小数部分（余り）」を出す
+            let results = baseShares.map(storeInfo => {
+                const exact = totalAllocation * storeInfo.share;
+                const intPart = Math.floor(exact);
+                const remainder = exact - intPart;
+                return {
+                    store: storeInfo.store,
+                    share: storeInfo.share,
+                    exact: exact,
+                    intPart: intPart,
+                    remainder: remainder,
+                    final: intPart
+                };
+            });
+
+            // Step 2: 整数部分の合計と、足りない枠（残余）を計算
+            let currentTotal = results.reduce((sum, r) => sum + r.intPart, 0);
+            let remainingSeats = totalAllocation - currentTotal;
+
+            // Step 3: 余りが大きい順にソートして、足りない枠を1ずつ配る
+            results.sort((a, b) => b.remainder - a.remainder);
+            for (let i = 0; i < remainingSeats && i < results.length; i++) {
+                results[i].final += 1;
+            }
+
+            // 元の売上順（シェア順）に戻す
+            results.sort((a, b) => b.share - a.share);
+
+            // テーブルに描画
+            let finalTotal = 0;
+            results.forEach(r => {
+                finalTotal += r.final;
+                const tr = document.createElement('tr');
+                tr.className = 'bg-white border-b hover:bg-gray-50 transition-colors';
+                
+                // シェアの表示 (例: 15.2%)
+                const shareStr = (r.share * 100).toFixed(1) + '%';
+                
+                tr.innerHTML = `
+                    <td class="px-4 py-2 font-medium text-gray-900">${r.store}</td>
+                    <td class="px-4 py-2 text-right">${shareStr}</td>
+                    <td class="px-4 py-2 text-right font-bold text-gray-900">${r.final}</td>
+                `;
+                tbody.appendChild(tr);
+            });
+
+            tfootTotal.textContent = finalTotal.toLocaleString();
+        }
+
+        function updateGapChart(stock, arrival, rawDemand, adjustedDemand) {
+            const ctx = document.getElementById('gapChart').getContext('2d');
+            const supplyTotal = stock + arrival;
+
+            if (gapChartInstance) {
+                gapChartInstance.destroy();
+            }
+
+            gapChartInstance = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: ['総供給力', '本来の総需要', '出荷上限(設定後)'],
+                    datasets: [{
+                        label: '個数',
+                        data: [supplyTotal, Math.round(rawDemand), adjustedDemand],
+                        backgroundColor: [
+                            'rgba(59, 130, 246, 0.7)',
+                            'rgba(239, 68, 68, 0.7)',
+                            'rgba(16, 185, 129, 0.7)'
+                        ],
+                        borderColor: [
+                            'rgb(59, 130, 246)',
+                            'rgb(239, 68, 68)',
+                            'rgb(16, 185, 129)'
+                        ],
+                        borderWidth: 1,
+                        borderRadius: 6
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        y: { beginAtZero: true, grid: { color: 'rgba(0,0,0,0.05)' } },
+                        x: { grid: { display: false } }
+                    },
+                    animation: { duration: 400, easing: 'easeOutQuart' }
+                }
+            });
+        }
+
+        function drawRankingChart() {
+            const sortedByWorst = [...rawData].sort((a, b) => (a["不足数"] || 0) - (b["不足数"] || 0));
+            const worst10 = sortedByWorst.filter(d => d["カラー名"] !== "nan" && d["カラー名"]).slice(0, 10);
+
+            const labels = worst10.map(d => d["カラー名"]);
+            const data = worst10.map(d => Math.round(d["不足数"] || 0));
+
+            const ctx = document.getElementById('rankingChart').getContext('2d');
+            
+            rankingChartInstance = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: '不足数',
+                        data: data,
+                        backgroundColor: data.map(v => v < 0 ? 'rgba(239, 68, 68, 0.6)' : 'rgba(59, 130, 246, 0.6)'),
+                        borderRadius: 4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    indexAxis: 'y',
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        x: { grid: { color: 'rgba(0,0,0,0.05)' } },
+                        y: { grid: { display: false } }
+                    }
+                }
+            });
+        }
+
+        window.addEventListener('DOMContentLoaded', init);
+    </script>
+</body>
+</html>

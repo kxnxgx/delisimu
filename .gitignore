@@ -1,0 +1,10 @@
+# 業務データ（実績・マスター・個人情報などを含む可能性のあるファイル）はGitの管理対象外にする
+*.xlsx
+*.csv
+dashboard_data.json
+dashboard_data.js
+
+# その他一時ファイル
+__pycache__/
+*.pyc
+.DS_Store

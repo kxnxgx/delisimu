@@ -1,0 +1,151 @@
+import pandas as pd
+import json
+import os
+import re
+
+# ファイルパス
+FILE_KANKEN = r"c:\Users\kxnxg\OneDrive\デスクトップ\シミュ２\Kanken23510_2026年版_v5.xlsx"
+FILE_BUNPAI = r"c:\Users\kxnxg\OneDrive\デスクトップ\シミュ２\分配店舗向け.xlsx"
+FILE_SALES_2026 = r"c:\Users\kxnxg\OneDrive\デスクトップ\シミュ２\2026実績.csv"
+OUTPUT_CSV  = r"c:\Users\kxnxg\OneDrive\デスクトップ\シミュ２\検証用_統合データ.csv"
+OUTPUT_JSON = r"c:\Users\kxnxg\OneDrive\デスクトップ\シミュ２\dashboard_data.json"
+
+# 2024年の実績に基づく月別累積進捗率（係数）
+CUMULATIVE_PROGRESS = {
+    1: 0.0437, 2: 0.1050, 3: 0.1970, 4: 0.3090, 5: 0.3968, 6: 0.4921,
+    7: 0.5968, 8: 0.7067, 9: 0.7903, 10: 0.8677, 11: 0.9360, 12: 1.0000
+}
+
+def main():
+    print("バックエンド処理（データ統合と計算）を開始します...")
+
+    # --- 1. Kankenデータの読み込み ---
+    df_kanken = pd.read_excel(FILE_KANKEN, sheet_name="全体サマリー", header=3)
+    
+    cols = df_kanken.columns.astype(str).tolist()
+    stock_col = next((c for c in cols if "倉庫WH" in c or "倉庫" in c), "6/1\n倉庫WH")
+    
+    stock_date = "6月1日" # デフォルト
+    m = re.search(r"(\d{1,2}/\d{1,2})", stock_col)
+    if m:
+        parts = m.group(1).split('/')
+        stock_date = f"{parts[0]}月{parts[1]}日"
+
+    kanken_cols = {
+        "カラー": "カラー名",
+        stock_col: "倉庫在庫",
+        "店舗\n在庫": "店舗在庫",
+        "FW\n入荷": "FW入荷予定",
+        "需要予測\n(6〜12月)": "残り需要予測"
+    }
+    
+    df_kanken.columns = df_kanken.columns.astype(str).str.strip()
+    available_cols = [c for c in kanken_cols.keys() if c in df_kanken.columns]
+    df_kanken = df_kanken[available_cols].rename(columns=kanken_cols)
+    df_kanken = df_kanken.dropna(subset=["カラー名"])
+    df_kanken["カラー名"] = df_kanken["カラー名"].astype(str).str.strip()
+
+    # --- 2. 2026実績.csv の読み込みと実績月の判定 ---
+    try:
+        df_stores = pd.read_csv(FILE_SALES_2026, encoding="utf-8")
+    except UnicodeDecodeError:
+        df_stores = pd.read_csv(FILE_SALES_2026, encoding="cp932")
+        
+    # 月数の判定（欠落や異常値に備えた厳格化）
+    if "MTH" in df_stores.columns:
+        actual_months_count = df_stores["MTH"].nunique()
+    else:
+        actual_months_count = 1
+    
+    # マジックナンバーを排し、1〜12の範囲に収める
+    actual_months_count = max(1, min(12, actual_months_count))
+        
+    progress_rate = CUMULATIVE_PROGRESS.get(actual_months_count, 1.0)
+    remain_months = max(0, 12 - actual_months_count)
+
+    # --- 3. マスタと売上（分配店舗向け）の読み込み ---
+    df_master = pd.read_excel(FILE_BUNPAI, sheet_name="master")
+    df_master["カラー名"] = df_master["カラー名"].astype(str).str.strip()
+
+    df_sales = pd.read_excel(FILE_BUNPAI, sheet_name="2026売上")
+    df_sales["カラー名"] = df_sales["カラー名"].astype(str).str.strip()
+    df_sales = df_sales.rename(columns={"販売数": "累計実績(販売数)"})
+    df_sales = df_sales.groupby("カラー名", as_index=False)["累計実績(販売数)"].sum()
+    
+    # --- 4. データの結合 ---
+    df_merged = pd.merge(df_master, df_sales[["カラー名", "累計実績(販売数)"]], on="カラー名", how="left")
+    df_merged = pd.merge(df_merged, df_kanken, on="カラー名", how="left")
+
+    fill_cols = ["倉庫在庫", "店舗在庫", "FW入荷予定", "累計実績(販売数)", "残り需要予測"]
+    for c in fill_cols:
+        if c in df_merged.columns:
+            df_merged[c] = pd.to_numeric(df_merged[c], errors='coerce').fillna(0).clip(lower=0).round().astype(int)
+
+    # --- 5. 計算ロジック（ローリングフォーキャスト） ---
+    df_merged["年間売上予測(計算)"] = (df_merged["累計実績(販売数)"] / progress_rate).round().astype(int)
+    df_merged["残り需要予測(現実ベース)"] = (df_merged["年間売上予測(計算)"] - df_merged["累計実績(販売数)"]).clip(lower=0).astype(int)
+    
+    df_merged["期首在庫"] = df_merged["倉庫在庫"] + df_merged["店舗在庫"]
+    df_merged["年末着地見込み"] = df_merged["期首在庫"] + df_merged["FW入荷予定"] - df_merged["残り需要予測(現実ベース)"]
+    df_merged["仕込ギャップ"] = df_merged["FW入荷予定"] - df_merged["残り需要予測(現実ベース)"]
+    
+    output_cols = [
+        "品番", "カラー名", "累計実績(販売数)", "年間売上予測(計算)",
+        "期首在庫", "残り需要予測(現実ベース)", "FW入荷予定", 
+        "仕込ギャップ", "年末着地見込み"
+    ]
+    df_merged = df_merged[[c for c in output_cols if c in df_merged.columns]]
+
+    # --- 6. 店舗別構成比（ベースシェア）の算出 ---
+    df_stores["拠点"] = df_stores["拠点"].replace({
+        "越一": "TOKYO NODE",
+        "心斎橋パルコ": "大丸心斎橋",
+        "FLAGS": "NARITA(FLAGS)"
+    })
+    
+    df_stores["数量"] = pd.to_numeric(df_stores["数量"], errors='coerce').fillna(0).clip(lower=0)
+    store_totals = df_stores.groupby("拠点")["数量"].sum()
+    total_sales = store_totals.sum()
+    
+    base_shares = []
+    if total_sales > 0:
+        for store, qty in store_totals.items():
+            base_shares.append({
+                "store": store,
+                "share": float(qty) / float(total_sales)
+            })
+    else:
+        num_stores = len(store_totals)
+        if num_stores > 0:
+            for store in store_totals.index:
+                base_shares.append({
+                    "store": store,
+                    "share": 1.0 / num_stores
+                })
+    base_shares = sorted(base_shares, key=lambda x: x["share"], reverse=True)
+
+    # --- 7. CSVとJSの出力 ---
+    df_merged.to_csv(OUTPUT_CSV, index=False, encoding="utf-8-sig")
+    records = df_merged.to_dict(orient="records")
+    
+    output_data = {
+        "summary": records,
+        "base_shares": base_shares,
+        "meta": {
+            "stock_date": stock_date,
+            "actual_months": int(actual_months_count),
+            "remain_months": int(remain_months)
+        }
+    }
+    
+    OUTPUT_JS = r"c:\Users\kxnxg\OneDrive\デスクトップ\シミュ２\dashboard_data.js"
+    with open(OUTPUT_JS, "w", encoding="utf-8") as f:
+        js_content = "const dashboardData = " + json.dumps(output_data, ensure_ascii=False, indent=2) + ";"
+        f.write(js_content)
+
+    print(f"処理完了: CSV -> {OUTPUT_CSV}")
+    print(f"処理完了: JS  -> {OUTPUT_JS}")
+    print(f"実績月数: {actual_months_count}ヶ月 (進捗率: {progress_rate*100:.2f}%)")
+
+if __name__ == "__main__":
+    main()
