@@ -1,0 +1,11 @@
+﻿=== 譏ｨ蟇ｾ豈斐す繝ｼ繝・(蜈ｨ陦・ ===
+1: ('23510(Kanken)螳溽ｸｾ', None, None, None, None, None, None, None, None, None, None)
+2: ('蟷ｴ蠎ｦ', '譛・, '雋ｩ螢ｲ謨ｰ', '讒区・豈・, '蟷ｴ蠎ｦ', '譛・, '雋ｩ螢ｲ謨ｰ', '蜑榊ｹｴ豈・, None, None, None)
+3: (2025, '1-5譛・, 4535, '=C3/C5', 2026, '1-5譛・, 7388, '=G3/C3', None, None, '莉雁ｹｴ縺ｮ1-5譛亥ｮ溽ｸｾ・・,389・峨ｒ43%縺ｧ蜑ｲ繧頑綾縺励※縲御ｻ雁ｹｴ縺ｮ蟷ｴ髢薙ヨ繝ｼ繧ｿ繝ｫ縺ｮ逹蝨ｰ隕玖ｾｼ縺ｿ縲阪ｒ邂怜・縺励√◎縺薙↓荳句濠譛溘・蜑ｲ蜷茨ｼ・7%・峨ｒ謗帙￠縺ｾ縺吶ゑｼ育ｵ先棡縺ｯ邏・9,795 縺ｫ縺ｪ繧翫∪縺呻ｼ・)
+4: (2025, '6-12譛・, 7692, '=C4/C5', 2026, '6-12譛茨ｼ郁ｦ玖ｾｼ縺ｿ・・, '=G3/D3*D4', '=G4/C4', None, None, 'K3/H3*H4')
+5: (2025, '邏ｯ險・, '=SUM(C3:C4)', '=SUM(D3:D4)', 2026, '邏ｯ險茨ｼ郁ｦ玖ｾｼ縺ｿ・・, '=SUM(G3:G4)', '=G5/C5', None, None, None)
+7: ('23510(Kanken)蜿玲ｳｨ險・, None, None, None, None, None, None, None, None, None, None)
+8: ('蟷ｴ蠎ｦ', '蜿玲ｳｨ蛻・, '譛滄ｦ門惠蠎ｫ', '邱乗焚', None, None, None, None, None, None, None)
+9: (2025, 10186, 439, '=B9+C9', None, None, None, None, None, None, None)
+10: (2026, 14332, 4152, '=B10+C10', None, None, None, None, None, None, None)
+11: ('譏ｨ蟇ｾ豈・, None, None, '=D10/D9', None, None, None, None, None, None, None)

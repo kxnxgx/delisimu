@@ -1,0 +1,11 @@
+﻿import os, shutil, csv, re, subprocess, sys, io, openpyxl
+sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
+BASE = os.getcwd()
+FILE_V5      = os.path.join(BASE, 'Kanken23510_2026' + chr(24180) + chr(29256) + '_v5.xlsx')
+FILE_V6      = os.path.join(BASE, 'Kanken23510_2026' + chr(24180) + chr(29256) + '_v6.xlsx')
+FILE_JISSEKI = os.path.join(BASE, '6.24' + chr(12414) + chr(12391) + chr(12398) + chr(23455) + chr(32321) + '.xlsx')
+FILE_CSV     = os.path.join(BASE, '2026' + chr(23455) + chr(32321) + '.csv')
+FILE_BACKEND = os.path.join(BASE, 'backend_calc.py')
+print('v5:', os.path.exists(FILE_V5))
+print('実績:', os.path.exists(FILE_JISSEKI))
+print('CSV:', os.path.exists(FILE_CSV))

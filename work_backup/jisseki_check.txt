@@ -1,0 +1,11 @@
+﻿繧ｷ繝ｼ繝井ｸ隕ｧ: ['Sheet2']
+
+=== Sheet2 === (繧ｵ繧､繧ｺ: A1:G650)
+1: ('蠎苓・蜷咲ｧｰ', '蜩∫分', 'StyleNo', '蝠・刀蜷・, '繧ｫ繝ｩ繝ｼ繧ｳ繝ｼ繝・, '繧ｫ繝ｩ繝ｼ蜷・, '謨ｰ驥・)
+2: ('FJALLRAVEN by 3NITY 莠ｬ邇区眠螳ｿ', '23510501X', 23510.0, 'Kanken', 501.0, 'Sky blue', 1.0)
+3: ('FJALLRAVEN by 3NITY POPUP', '23510021-312X', 23510.0, 'Kanken', '021-312', 'Fog-Pink', 1.0)
+4: ('FJALLRAVEN STORE 蜷榊商螻九ヵ繧｡繝・す繝ｧ繝ｳ繝ｯ繝ｳ', '23510302X', 23510.0, 'Kanken', 302.0, 'Chalk Rose', 1.0)
+5: ('FJALLRAVEN by 3NITY 莠ｬ邇区眠螳ｿ', '23510302X', 23510.0, 'Kanken', 302.0, 'Chalk Rose', 1.0)
+6: ('FJALLRAVEN by 3NITY 莠ｬ邇区眠螳ｿ', '23510560X', 23510.0, 'Kanken', 560.0, 'Navy', 1.0)
+7: ('FJALLRAVEN by 3NITY POPUP', '23510457-916X', 23510.0, 'Kanken', '457-916', 'Pastel Lavender-Confetti Pattern', 1.0)
+8: ('FJALLRAVEN by 3NITY 繝ｫ繧ｯ繧｢螟ｧ髦ｪ', '23510501X', 23510.0, 'Kanken', 501.0, 'Sky blue', 1.0)

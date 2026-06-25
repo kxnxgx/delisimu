@@ -1,0 +1,71 @@
+﻿python : Traceback (most recent call last):
+発生場所 行:1 文字:1
++ python update_v6.py 2>&1 | Out-File -FilePath update_v6_log.txt -Enco ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (Traceback (most recent call last)::String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+  File "C:\Users\kxnxg\OneDrive\デスクトップ\シミュ２\update_v6.py", line 281, in main
+    try: fn()
+         ~~^^
+  File "C:\Users\kxnxg\OneDrive\デスクトップ\シミュ２\update_v6.py", line 101, in process_june_actuals
+    wb = openpyxl.load_workbook(FILE_JISSEKI)
+  File "C:\Users\kxnxg\AppData\Roaming\Python\Python314\site-packages\openpyxl\reader\excel.py", line 346, in load_work
+book
+    reader = ExcelReader(filename, read_only, keep_vba,
+                         data_only, keep_links, rich_text)
+  File "C:\Users\kxnxg\AppData\Roaming\Python\Python314\site-packages\openpyxl\reader\excel.py", line 123, in __init__
+    self.archive = _validate_archive(fn)
+                   ~~~~~~~~~~~~~~~~~^^^^
+  File "C:\Users\kxnxg\AppData\Roaming\Python\Python314\site-packages\openpyxl\reader\excel.py", line 95, in _validate_
+archive
+    archive = ZipFile(filename, 'r')
+  File "C:\Python314\Lib\zipfile\__init__.py", line 1453, in __init__
+    self.fp = io.open(file, filemode)
+              ~~~~~~~^^^^^^^^^^^^^^^^
+FileNotFoundError: [Errno 2] No such file or directory: 'c:\\Users\\kxnxg\\OneDrive\\デスクトップ\\シミュ2\\6.24までの実績.xlsx'
+Traceback (most recent call last):
+  File "C:\Users\kxnxg\OneDrive\デスクトップ\シミュ２\update_v6.py", line 281, in main
+    try: fn()
+         ~~^^
+  File "C:\Users\kxnxg\OneDrive\デスクトップ\シミュ２\update_v6.py", line 238, in create_v6
+    shutil.copy(FILE_V5, FILE_V6); print(f"  コピー: {os.path.basename(FILE_V5)} → {os.path.basename(FILE_V6)}")
+    ~~~~~~~~~~~^^^^^^^^^^^^^^^^^^
+  File "C:\Python314\Lib\shutil.py", line 489, in copy
+    copyfile(src, dst, follow_symlinks=follow_symlinks)
+    ~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Python314\Lib\shutil.py", line 313, in copyfile
+    with open(src, 'rb') as fsrc:
+         ~~~~^^^^^^^^^^^
+FileNotFoundError: [Errno 2] No such file or directory: 'c:\\Users\\kxnxg\\OneDrive\\デスクトップ\\シミュ2\\Kanken23510_2026年版_v
+5.xlsx'
+Traceback (most recent call last):
+  File "C:\Users\kxnxg\OneDrive\デスクトップ\シミュ２\update_v6.py", line 281, in main
+    try: fn()
+         ~~^^
+  File "C:\Users\kxnxg\OneDrive\デスクトップ\シミュ２\update_v6.py", line 264, in update_and_run_backend
+    with open(FILE_BACKEND, "r", encoding="utf-8") as f: content = f.read()
+         ~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+FileNotFoundError: [Errno 2] No such file or directory: 'c:\\Users\\kxnxg\\OneDrive\\デスクトップ\\シミュ2\\backend_calc.py'
+
+============================================================
+  Kanken23510 v5 竊・v6 譖ｴ譁ｰ繧ｹ繧ｯ繝ｪ繝励ヨ 髢句ｧ・
+============================================================
+==================================================
+Phase 1: 6譛亥ｮ溽ｸｾ繧・2026螳溽ｸｾ.csv 縺ｫ霑ｽ險・
+==================================================
+
+==================================================
+Phase 2: v6 Excel 菴懈・
+==================================================
+
+==================================================
+Phase 3: 繝繝・す繝･繝懊・繝画峩譁ｰ
+==================================================
+
+============================================================
+  笞・・螳御ｺ・ｼ医お繝ｩ繝ｼ 3 莉ｶ・・
+    - Phase1: [Errno 2] No such file or directory: 'c:\\Users\\kxnxg\\OneDrive\\繝・せ繧ｯ繝医ャ繝予\繧ｷ繝溘Η2\\6.24縺ｾ縺ｧ縺ｮ螳溽ｸｾ.xlsx'
+    - Phase2: [Errno 2] No such file or directory: 'c:\\Users\\kxnxg\\OneDrive\\繝・せ繧ｯ繝医ャ繝予\繧ｷ繝溘Η2\\Kanken23510_2026蟷ｴ迚・v5.xlsx'
+    - Phase3: [Errno 2] No such file or directory: 'c:\\Users\\kxnxg\\OneDrive\\繝・せ繧ｯ繝医ャ繝予\繧ｷ繝溘Η2\\backend_calc.py'
+============================================================

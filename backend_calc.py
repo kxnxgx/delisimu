@@ -4,13 +4,14 @@ import os
 import re
 
 # ファイルパス
-FILE_KANKEN = r"c:\Users\kxnxg\OneDrive\デスクトップ\シミュ２\Kanken23510_2026年版_v5.xlsx"
+FILE_KANKEN = r"c:\Users\kxnxg\OneDrive\デスクトップ\シミュ２\Kanken23510_2026年版_v6.xlsx"
 FILE_BUNPAI = r"c:\Users\kxnxg\OneDrive\デスクトップ\シミュ２\分配店舗向け.xlsx"
 FILE_SALES_2026 = r"c:\Users\kxnxg\OneDrive\デスクトップ\シミュ２\2026実績.csv"
 OUTPUT_CSV  = r"c:\Users\kxnxg\OneDrive\デスクトップ\シミュ２\検証用_統合データ.csv"
 OUTPUT_JSON = r"c:\Users\kxnxg\OneDrive\デスクトップ\シミュ２\dashboard_data.json"
 
 # 2024年の実績に基づく月別累積進捗率（係数）
+# ※2026年も2024年と同様の季節パターン（売れ方のカーブ）になると仮定して年間予測を推計しています。
 CUMULATIVE_PROGRESS = {
     1: 0.0437, 2: 0.1050, 3: 0.1970, 4: 0.3090, 5: 0.3968, 6: 0.4921,
     7: 0.5968, 8: 0.7067, 9: 0.7903, 10: 0.8677, 11: 0.9360, 12: 1.0000
@@ -20,10 +21,28 @@ def main():
     print("バックエンド処理（データ統合と計算）を開始します...")
 
     # --- 1. Kankenデータの読み込み ---
-    df_kanken = pd.read_excel(FILE_KANKEN, sheet_name="全体サマリー", header=3)
+    try:
+        if not os.path.exists(FILE_KANKEN):
+            raise FileNotFoundError(f"最新のKankenデータファイルが見つかりません。\nパス: {FILE_KANKEN}")
+        df_kanken = pd.read_excel(FILE_KANKEN, sheet_name="全体サマリー", header=3)
+    except FileNotFoundError as e:
+        print(f"\n【エラー】{e}")
+        print("ファイル名や保存場所が正しいか確認してください。")
+        return
+    except ValueError as e:
+        print(f"\n【エラー】Kankenデータファイル内に「全体サマリー」シートが見つかりません。")
+        print(f"詳細エラー: {e}")
+        return
+    except Exception as e:
+        print(f"\n【エラー】Kankenデータファイルの読み込み中に予期せぬエラーが発生しました。")
+        print(f"詳細エラー: {e}")
+        return
     
-    cols = df_kanken.columns.astype(str).tolist()
-    stock_col = next((c for c in cols if "倉庫WH" in c or "倉庫" in c), "6/1\n倉庫WH")
+    # カラム名の改行文字を削除してからマッチングを行う
+    df_kanken.columns = df_kanken.columns.astype(str).str.replace('\n', '', regex=False).str.strip()
+    
+    cols = df_kanken.columns.tolist()
+    stock_col = next((c for c in cols if "倉庫WH" in c or "倉庫" in c), "6/1倉庫WH")
     
     stock_date = "6月1日" # デフォルト
     m = re.search(r"(\d{1,2}/\d{1,2})", stock_col)
@@ -34,12 +53,11 @@ def main():
     kanken_cols = {
         "カラー": "カラー名",
         stock_col: "倉庫在庫",
-        "店舗\n在庫": "店舗在庫",
-        "FW\n入荷": "FW入荷予定",
-        "需要予測\n(6〜12月)": "残り需要予測"
+        "店舗在庫": "店舗在庫",
+        "FW入荷": "FW入荷予定",
+        "需要予測(6〜12月)": "残り需要予測"
     }
     
-    df_kanken.columns = df_kanken.columns.astype(str).str.strip()
     available_cols = [c for c in kanken_cols.keys() if c in df_kanken.columns]
     df_kanken = df_kanken[available_cols].rename(columns=kanken_cols)
     df_kanken = df_kanken.dropna(subset=["カラー名"])
@@ -47,13 +65,29 @@ def main():
 
     # --- 2. 2026実績.csv の読み込みと実績月の判定 ---
     try:
+        if not os.path.exists(FILE_SALES_2026):
+            raise FileNotFoundError(f"実績データファイルが見つかりません。\nパス: {FILE_SALES_2026}")
         df_stores = pd.read_csv(FILE_SALES_2026, encoding="utf-8")
+    except FileNotFoundError as e:
+        print(f"\n【エラー】{e}")
+        print("ファイル名や保存場所が正しいか確認してください。")
+        return
     except UnicodeDecodeError:
-        df_stores = pd.read_csv(FILE_SALES_2026, encoding="cp932")
+        try:
+            df_stores = pd.read_csv(FILE_SALES_2026, encoding="cp932")
+        except Exception as e:
+            print(f"\n【エラー】実績データファイル（CSV）の読み込み中に文字コードエラーが発生しました。")
+            print(f"詳細エラー: {e}")
+            return
+    except Exception as e:
+        print(f"\n【エラー】実績データファイルの読み込み中に予期せぬエラーが発生しました。")
+        print(f"詳細エラー: {e}")
+        return
         
     # 月数の判定（欠落や異常値に備えた厳格化）
     if "MTH" in df_stores.columns:
-        actual_months_count = df_stores["MTH"].nunique()
+        VALID_MONTHS = {'JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'}
+        actual_months_count = df_stores[df_stores["MTH"].isin(VALID_MONTHS)]["MTH"].nunique()
     else:
         actual_months_count = 1
     
@@ -64,13 +98,29 @@ def main():
     remain_months = max(0, 12 - actual_months_count)
 
     # --- 3. マスタと売上（分配店舗向け）の読み込み ---
-    df_master = pd.read_excel(FILE_BUNPAI, sheet_name="master")
-    df_master["カラー名"] = df_master["カラー名"].astype(str).str.strip()
-
-    df_sales = pd.read_excel(FILE_BUNPAI, sheet_name="2026売上")
-    df_sales["カラー名"] = df_sales["カラー名"].astype(str).str.strip()
-    df_sales = df_sales.rename(columns={"販売数": "累計実績(販売数)"})
-    df_sales = df_sales.groupby("カラー名", as_index=False)["累計実績(販売数)"].sum()
+    try:
+        if not os.path.exists(FILE_BUNPAI):
+            raise FileNotFoundError(f"分配店舗向けデータファイルが見つかりません。\nパス: {FILE_BUNPAI}")
+        
+        df_master = pd.read_excel(FILE_BUNPAI, sheet_name="master")
+        df_master["カラー名"] = df_master["カラー名"].astype(str).str.strip()
+        
+        df_sales = pd.read_excel(FILE_BUNPAI, sheet_name="2026売上")
+        df_sales["カラー名"] = df_sales["カラー名"].astype(str).str.strip()
+        df_sales = df_sales.rename(columns={"販売数": "累計実績(販売数)"})
+        df_sales = df_sales.groupby("カラー名", as_index=False)["累計実績(販売数)"].sum()
+    except FileNotFoundError as e:
+        print(f"\n【エラー】{e}")
+        print("ファイル名や保存場所が正しいか確認してください。")
+        return
+    except ValueError as e:
+        print(f"\n【エラー】分配店舗向けデータファイル内に必要なシート（「master」または「2026売上」）が見つかりません。")
+        print(f"詳細エラー: {e}")
+        return
+    except Exception as e:
+        print(f"\n【エラー】分配店舗向けデータファイルの読み込み中に予期せぬエラーが発生しました。")
+        print(f"詳細エラー: {e}")
+        return
     
     # --- 4. データの結合 ---
     df_merged = pd.merge(df_master, df_sales[["カラー名", "累計実績(販売数)"]], on="カラー名", how="left")
@@ -83,6 +133,8 @@ def main():
 
     # --- 5. 計算ロジック（ローリングフォーキャスト） ---
     df_merged["年間売上予測(計算)"] = (df_merged["累計実績(販売数)"] / progress_rate).round().astype(int)
+    # ※Kankenファイル由来の需要予測は参考値として読み込んでいますが、
+    # 最終的な計算には以下のローリングキャストで算出した「残り需要予測(現実ベース)」を使用します。
     df_merged["残り需要予測(現実ベース)"] = (df_merged["年間売上予測(計算)"] - df_merged["累計実績(販売数)"]).clip(lower=0).astype(int)
     
     df_merged["期首在庫"] = df_merged["倉庫在庫"] + df_merged["店舗在庫"]
@@ -95,6 +147,9 @@ def main():
         "仕込ギャップ", "年末着地見込み"
     ]
     df_merged = df_merged[[c for c in output_cols if c in df_merged.columns]]
+
+    # 実績も入荷も在庫もないゼロ行を除外 (画面表示をスッキリさせるため)
+    df_merged = df_merged[(df_merged["累計実績(販売数)"] > 0) | (df_merged["FW入荷予定"] > 0) | (df_merged["期首在庫"] > 0)]
 
     # --- 6. 店舗別構成比（ベースシェア）の算出 ---
     df_stores["拠点"] = df_stores["拠点"].replace({

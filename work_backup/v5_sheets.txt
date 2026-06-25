@@ -1,0 +1,34 @@
+﻿v5 繧ｷ繝ｼ繝井ｸ隕ｧ:
+  [險育ｮ励Ο繧ｸ繝・け隱ｬ譏讃 - B1:I55
+  [2026蟷ｴ逹蝨ｰ莠域ｸｬ] - B1:M31
+  [萓帷ｵｦ髴隕√す繝溘Η繝ｬ繝ｼ繧ｷ繝ｧ繝ｳ] - B1:I13
+  [蜈ｨ菴薙し繝槭Μ繝ｼ] - B1:L34
+  [蠎鈴ｭ蝨ｨ蠎ｫ_螳溽ｸｾ蜈･蜉嫋 - B1:I33
+  [2025蟷ｴ蜈･闕ｷ豈碑ｼゾ - B1:M77
+  [Fog-Pink] - B1:I42
+  [Black] - B1:I42
+  [Navy] - B1:I42
+  [Pastel Lavender] - B1:I42
+  [Chalk Rose] - B1:I42
+  [Frost Green] - B1:I42
+  [Graphite] - B1:I42
+  [Super grey] - B1:I42
+  [Fog] - B1:I42
+  [Sky blue] - B1:I42
+  [Ox Red] - B1:I42
+  [Pink] - B1:I42
+  [Blackberry] - B1:I42
+  [Sky Blue-Light Oak] - B1:I42
+  [Royal Blue] - B1:I42
+  [Fossil] - B1:I42
+  [Corn] - B1:I42
+  [Ochre] - B1:I42
+  [Mint Green] - B1:I42
+  [Forest Green] - B1:I42
+  [Green] - B1:I42
+  [Clay] - B1:I42
+  [Midnight Purple] - B1:I42
+  [Black Oak] - B1:I42
+  [Khaki Dust] - B1:I42
+  [Pastel Lavender-Confetti Pat] - B1:I42
+  [Teal] - B1:I42
