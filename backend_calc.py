@@ -2,13 +2,24 @@ import pandas as pd
 import json
 import os
 import re
+import glob
 
-# ファイルパス
-FILE_KANKEN = r"c:\Users\kxnxg\OneDrive\デスクトップ\シミュ２\Kanken23510_2026年版_v6.xlsx"
-FILE_BUNPAI = r"c:\Users\kxnxg\OneDrive\デスクトップ\シミュ２\分配店舗向け.xlsx"
-FILE_SALES_2026 = r"c:\Users\kxnxg\OneDrive\デスクトップ\シミュ２\2026実績.csv"
-OUTPUT_CSV  = r"c:\Users\kxnxg\OneDrive\デスクトップ\シミュ２\検証用_統合データ.csv"
-OUTPUT_JSON = r"c:\Users\kxnxg\OneDrive\デスクトップ\シミュ２\dashboard_data.json"
+# ファイルパス（固定のもの）
+FILE_KANKEN = r"C:\Users\kesuzuki\Desktop\シミュ２\Kanken23510_2026年版_v6.xlsx"
+FILE_BUNPAI = r"C:\Users\kesuzuki\Desktop\シミュ２\分配店舗向け.xlsx"
+OUTPUT_CSV  = r"C:\Users\kesuzuki\Desktop\シミュ２\検証用_統合データ.csv"
+OUTPUT_JSON = r"C:\Users\kesuzuki\Desktop\シミュ２\dashboard_data.json"
+
+def find_latest_sales_csv() -> str:
+    """フォルダ内の *実績.csv を探し、更新日時が最新のファイルパスを返す。"""
+    base_dir   = os.path.dirname(os.path.abspath(FILE_KANKEN))
+    pattern    = os.path.join(base_dir, '*実績.csv')
+    candidates = glob.glob(pattern)
+    if not candidates:
+        raise FileNotFoundError(
+            "'*実績.csv' が見つかりません。フォルダに実績CSVを配置してください。"
+        )
+    return max(candidates, key=os.path.getmtime)
 
 # 2024年の実績に基づく月別累積進捗率（係数）
 # ※2026年も2024年と同様の季節パターン（売れ方のカーブ）になると仮定して年間予測を推計しています。
@@ -63,18 +74,19 @@ def main():
     df_kanken = df_kanken.dropna(subset=["カラー名"])
     df_kanken["カラー名"] = df_kanken["カラー名"].astype(str).str.strip()
 
-    # --- 2. 2026実績.csv の読み込みと実績月の判定 ---
+    # --- 2. 実績CSVの自動検索・読み込みと実績月の判定 ---
     try:
-        if not os.path.exists(FILE_SALES_2026):
-            raise FileNotFoundError(f"実績データファイルが見つかりません。\nパス: {FILE_SALES_2026}")
-        df_stores = pd.read_csv(FILE_SALES_2026, encoding="utf-8")
+        file_sales = find_latest_sales_csv()
+        print(f"  使用する実績ファイル: {os.path.basename(file_sales)}")
     except FileNotFoundError as e:
         print(f"\n【エラー】{e}")
-        print("ファイル名や保存場所が正しいか確認してください。")
         return
+
+    try:
+        df_stores = pd.read_csv(file_sales, encoding="cp932")
     except UnicodeDecodeError:
         try:
-            df_stores = pd.read_csv(FILE_SALES_2026, encoding="cp932")
+            df_stores = pd.read_csv(file_sales, encoding="utf-8")
         except Exception as e:
             print(f"\n【エラー】実績データファイル（CSV）の読み込み中に文字コードエラーが発生しました。")
             print(f"詳細エラー: {e}")
@@ -83,6 +95,13 @@ def main():
         print(f"\n【エラー】実績データファイルの読み込み中に予期せぬエラーが発生しました。")
         print(f"詳細エラー: {e}")
         return
+
+    # 列名のゆらぎ対応（数量 / 販売数）
+    if '数量' not in df_stores.columns and '販売数' in df_stores.columns:
+        df_stores = df_stores.rename(columns={'販売数': '数量'})
+    # 列名のゆらぎ対応（商品コード / 行ラベル → 品番として使用）
+    if '品番' not in df_stores.columns and '行ラベル' in df_stores.columns:
+        df_stores = df_stores.rename(columns={'行ラベル': '品番'})
         
     # 月数の判定（欠落や異常値に備えた厳格化）
     if "MTH" in df_stores.columns:
@@ -193,7 +212,7 @@ def main():
         }
     }
     
-    OUTPUT_JS = r"c:\Users\kxnxg\OneDrive\デスクトップ\シミュ２\dashboard_data.js"
+    OUTPUT_JS = r"C:\Users\kesuzuki\Desktop\シミュ２\dashboard_data.js"
     with open(OUTPUT_JS, "w", encoding="utf-8") as f:
         js_content = "const dashboardData = " + json.dumps(output_data, ensure_ascii=False, indent=2) + ";"
         f.write(js_content)

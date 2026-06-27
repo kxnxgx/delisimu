@@ -1,94 +1,290 @@
+"""
+update_v6.py
+============
+在庫一覧.csv と 最新の *実績.csv を読み込み、
+Kanken23510_2026年版_v6.xlsx の「全体サマリー」シートを自動更新する。
+
+【更新対象列】
+  D列: 倉庫WH    ← バルク + New Way-A の合計現在数量
+  E列: 店舗在庫  ← 全実店舗 + EC（ZOZO/丸井）の合計現在数量
+  I列: 需要予測  ← 直近実績ベースで再計算（スケール係数を乗じる）
+  L列: 過不足    ← H列(総供給) - I列(需要予測) で再計算
+"""
+
+import sys
+import os
+import glob
 import openpyxl
 import pandas as pd
-import sys
+
 sys.stdout.reconfigure(encoding='utf-8')
 
 # ==============================================================
-# 設定エリア: C3/C4の変更前後の値
+# 設定エリア
 # ==============================================================
-C3_OLD = 4535   # 変更前の2025年1-5月実績
-C4_OLD = 7692   # 変更前の2025年6-12月実績
-C3_NEW = 5490   # 変更後の2025年1-5月実績（現在の値）
-C4_NEW = 7411   # 変更後の2025年6-12月実績（現在の値）
-G3 = 7389       # 2026年1-5月実績（不変）
+EXCEL_FILE  = 'Kanken23510_2026年版_v6.xlsx'
+STOCK_CSV   = '在庫一覧.csv'
+BUNPAI_XLSX = '分配店舗向け.xlsx'
+
+# 倉庫WH として集計する拠点名（現在数量の合計をD列に書く）
+WAREHOUSE_LOCATIONS = {
+    'バルク',
+    'New Way-A',
+}
+
+# 除外する拠点名（不良在庫・集計対象外）
+EXCLUDE_LOCATIONS = {
+    'New Way-B',
+    'New Way-C',
+    'New Way-G',
+}
+# ※上記以外の全拠点 = 店舗在庫（ZOZO・丸井ｳｪﾌﾞも含む）
+
+# 2024年実績ベースの月別累積進捗率（backend_calc.py と共通）
+CUMULATIVE_PROGRESS = {
+    1: 0.0437, 2: 0.1050, 3: 0.1970, 4: 0.3090, 5: 0.3968, 6: 0.4921,
+    7: 0.5968, 8: 0.7067, 9: 0.7903, 10: 0.8677, 11: 0.9360, 12: 1.0000
+}
+
+MONTH_MAP = {
+    'JAN': 1, 'FEB': 2, 'MAR': 3, 'APR': 4, 'MAY': 5,  'JUN': 6,
+    'JUL': 7, 'AUG': 8, 'SEP': 9, 'OCT': 10, 'NOV': 11, 'DEC': 12
+}
+
+# v6「全体サマリー」の列番号（1始まり・openpyxl基準）
+COL_COLOR  = 3   # C: カラー
+COL_WH     = 4   # D: 倉庫WH
+COL_STORE  = 5   # E: 店舗在庫
+COL_SUPPLY = 8   # H: 総供給(6月〜)
+COL_DEMAND = 9   # I: 需要予測(6〜12月)
+COL_DIFF   = 12  # L: 過不足
+
+HEADER_ROW = 4  # 列ヘッダー行
+DATA_START = 5  # データ開始行
 # ==============================================================
 
-# G4の計算（分配店舗向け 昨対比シートの計算式: G3 / D3 × D4）
-G4_OLD = G3 / (C3_OLD / (C3_OLD + C4_OLD)) * (C4_OLD / (C3_OLD + C4_OLD))
-G4_NEW = G3 / (C3_NEW / (C3_NEW + C4_NEW)) * (C4_NEW / (C3_NEW + C4_NEW))
-SCALE = G4_NEW / G4_OLD
 
-print("=" * 55)
-print("【変更内容の確認】")
-print("=" * 55)
-print(f"  C3 (2025年1-5月実績): {C3_OLD:,} → {C3_NEW:,}")
-print(f"  C4 (2025年6-12月実績): {C4_OLD:,} → {C4_NEW:,}")
-print()
-print(f"  変更前 1-5月構成比: {C3_OLD/(C3_OLD+C4_OLD):.4f}")
-print(f"  変更後 1-5月構成比: {C3_NEW/(C3_NEW+C4_NEW):.4f}")
-print()
-print(f"  変更前 G4 (全体6-12月需要見込み): {G4_OLD:,.0f}")
-print(f"  変更後 G4 (全体6-12月需要見込み): {G4_NEW:,.0f}")
-print(f"  スケール係数: {SCALE:.4f} ({(SCALE-1)*100:+.1f}%)")
-print()
+def find_latest_sales_csv() -> str:
+    """フォルダ内の *実績.csv を探し、最新の1ファイルを返す。"""
+    base_dir   = os.path.dirname(os.path.abspath(__file__))
+    pattern    = os.path.join(base_dir, '*実績.csv')
+    candidates = glob.glob(pattern)
+    if not candidates:
+        raise FileNotFoundError(
+            "'*実績.csv' が見つかりません。フォルダに実績CSVを配置してください。"
+        )
+    latest = max(candidates, key=os.path.getmtime)
+    return latest
 
-# V6の全体サマリーシートを読み込んで需要予測を更新
-# 行番号マッピングのため pandas で先に読み込み
-df = pd.read_excel('Kanken23510_2026年版_v6.xlsx', sheet_name='全体サマリー', header=3)
-df.columns = df.columns.astype(str).str.replace('\n', '', regex=False).str.strip()
-df = df.dropna(subset=['カラー'])
-df = df[df['カラー'] != '合計']
 
-# openpyxl でV6を開く（書式を壊さないよう data_only=False で開く）
-wb = openpyxl.load_workbook('Kanken23510_2026年版_v6.xlsx')
-ws = wb['全体サマリー']
+def load_master(path: str) -> dict:
+    """分配店舗向け.xlsx の master シートから {品番: カラー名} を返す。"""
+    df = pd.read_excel(path, sheet_name='master')
+    df['品番']    = df['品番'].astype(str).str.strip()
+    df['カラー名'] = df['カラー名'].astype(str).str.strip()
+    return dict(zip(df['品番'], df['カラー名']))
 
-print("=" * 55)
-print("【V6 全体サマリー 需要予測更新プレビュー】")
-print("=" * 55)
-print(f"{'カラー':30} {'旧需要':>6} {'新需要':>6} {'旧過不足':>8} {'新過不足':>8}")
-print("-" * 65)
 
-# ヘッダーは4行目（row=4）なので、データは5行目から
-# 列マッピング (openpyxlは1始まり): 
-#   B=2(#), C=3(カラー), D=4(倉庫WH), E=5(店舗在庫), F=6(FW入荷)
-#   G=7(2025入荷), H=8(総供給), I=9(需要予測), J=10(配分方式), K=11(年間出荷計画), L=12(過不足)
+def load_stock(path: str, master: dict) -> tuple:
+    """
+    在庫一覧.csv から カラー別の (倉庫WH合計, 店舗在庫合計) を返す。
+    Returns:
+        wh_stock   : {カラー名: 倉庫WH合計}
+        store_stock: {カラー名: 店舗在庫合計}
+    """
+    try:
+        df = pd.read_csv(path, encoding='cp932')
+    except UnicodeDecodeError:
+        df = pd.read_csv(path, encoding='utf-8')
 
-updated_colors = []
-for row in ws.iter_rows(min_row=5, max_row=ws.max_row):
-    color_cell = row[2]   # C列 = カラー
-    supply_cell = row[7]  # H列 = 総供給(6月〜)
-    demand_cell = row[8]  # I列 = 需要予測(6〜12月)
-    diff_cell   = row[11] # L列 = 過不足
+    df['商品コード'] = df['商品コード'].astype(str).str.strip()
+    df['現在数量']   = pd.to_numeric(df['現在数量'], errors='coerce').fillna(0).clip(lower=0)
 
-    if color_cell.value is None or str(color_cell.value).strip() in ('', '合計'):
-        continue
-    if demand_cell.value is None or not isinstance(demand_cell.value, (int, float)):
-        continue
+    # カラー名を付与
+    df['カラー名'] = df['商品コード'].map(master)
 
-    old_demand = float(demand_cell.value)
-    new_demand = round(old_demand * SCALE)
-    supply = float(supply_cell.value) if supply_cell.value else 0
-    old_diff = float(diff_cell.value) if diff_cell.value else 0
-    new_diff = supply - new_demand
+    # 紐付けできなかった行を警告表示
+    unmapped = df[df['カラー名'].isna()]['商品コード'].unique()
+    if len(unmapped) > 0:
+        print(f"  [警告] masterに存在しない商品コード（スキップ）: {unmapped.tolist()}")
 
-    print(f"{str(color_cell.value):30} {old_demand:>6.0f} {new_demand:>6.0f} {old_diff:>8.0f} {new_diff:>8.0f}")
+    df = df.dropna(subset=['カラー名'])
 
-    # 書き込み
-    demand_cell.value = new_demand
-    diff_cell.value = new_diff
-    updated_colors.append(color_cell.value)
+    # 除外拠点を除く
+    df = df[~df['拠点名'].isin(EXCLUDE_LOCATIONS)]
 
-total_new_demand = sum(
-    row[8].value for row in ws.iter_rows(min_row=5, max_row=ws.max_row)
-    if row[2].value and str(row[2].value).strip() not in ('', '合計')
-    and isinstance(row[8].value, (int, float))
-)
+    # 倉庫WH と 店舗在庫 に分類
+    df['区分'] = df['拠点名'].apply(
+        lambda x: '倉庫' if x in WAREHOUSE_LOCATIONS else '店舗'
+    )
 
-print("-" * 65)
-print(f"{'合計':30} {15362:>6.0f} {total_new_demand:>6.0f}")
-print()
-print(f"✅ {len(updated_colors)} 色を更新しました")
+    wh_stock    = df[df['区分'] == '倉庫'].groupby('カラー名')['現在数量'].sum().astype(int).to_dict()
+    store_stock = df[df['区分'] == '店舗'].groupby('カラー名')['現在数量'].sum().astype(int).to_dict()
 
-wb.save('Kanken23510_2026年版_v6.xlsx')
-print("✅ Kanken23510_2026年版_v6.xlsx を上書き保存しました")
+    return wh_stock, store_stock
+
+
+def load_sales(path: str) -> tuple:
+    """
+    実績CSVからカラー別販売数の合計と実績月数を返す。
+    Returns:
+        sales_by_color: {カラー名: 販売数合計}
+        months_count  : 実績に含まれる月数
+    """
+    try:
+        df = pd.read_csv(path, encoding='cp932')
+    except UnicodeDecodeError:
+        df = pd.read_csv(path, encoding='utf-8')
+
+    # 列名のゆらぎ対応
+    if 'カラー' in df.columns:
+        color_col = 'カラー'
+    elif 'カラー名' in df.columns:
+        color_col = 'カラー名'
+    else:
+        raise ValueError("実績CSVに 'カラー' または 'カラー名' 列が見つかりません。")
+
+    if '販売数' in df.columns:
+        qty_col = '販売数'
+    elif '数量' in df.columns:
+        qty_col = '数量'
+    else:
+        raise ValueError("実績CSVに '販売数' または '数量' 列が見つかりません。")
+
+    df[color_col] = df[color_col].astype(str).str.strip()
+    df[qty_col]   = pd.to_numeric(df[qty_col], errors='coerce').fillna(0).clip(lower=0)
+
+    sales_by_color = df.groupby(color_col)[qty_col].sum().astype(int).to_dict()
+
+    # 実績月数の算定
+    if 'MTH' in df.columns:
+        valid_months = {m for m in df['MTH'].dropna().str.upper().unique() if m in MONTH_MAP}
+        months_count = len(valid_months)
+    else:
+        months_count = 1
+
+    months_count = max(1, min(12, months_count))
+    return sales_by_color, months_count
+
+
+def calc_scale_factor(sales_by_color: dict, months_count: int, ws) -> tuple:
+    """
+    実績ベースの需要予測スケール係数を算出する。
+    「全カラー合計の実績 / 進捗率 = 年間予測」→「残り月比率」で6〜12月需要を推計。
+    Returns: (scale, annual_forecast, new_6to12_demand)
+    """
+    progress_rate   = CUMULATIVE_PROGRESS.get(months_count, 1.0)
+    total_actual    = sum(sales_by_color.values())
+    annual_forecast = total_actual / progress_rate
+    future_rate     = 1.0 - progress_rate
+    new_6to12_demand = annual_forecast * future_rate
+
+    # 現行v6の需要予測合計を取得（スケール基準）
+    old_demand_total = 0.0
+    for row in ws.iter_rows(min_row=DATA_START, max_row=ws.max_row):
+        color_cell  = row[COL_COLOR  - 1]
+        demand_cell = row[COL_DEMAND - 1]
+        if color_cell.value is None or str(color_cell.value).strip() in ('', '合計'):
+            continue
+        if isinstance(demand_cell.value, (int, float)):
+            old_demand_total += float(demand_cell.value)
+
+    if old_demand_total == 0:
+        raise ZeroDivisionError("v6の需要予測合計がゼロです。ファイルを確認してください。")
+
+    scale = new_6to12_demand / old_demand_total
+    return scale, annual_forecast, new_6to12_demand
+
+
+def main():
+    print("=" * 60)
+    print("  v6 データ自動更新スクリプト")
+    print("=" * 60)
+
+    # --- 1. マスタ読込 ---
+    print("\n[1/5] マスタデータ（品番↔カラー名）を読み込み中...")
+    master = load_master(BUNPAI_XLSX)
+    print(f"      {len(master)} 品番を読み込みました。")
+
+    # --- 2. 在庫一覧読込 ---
+    print(f"\n[2/5] 在庫一覧 ({STOCK_CSV}) を読み込み中...")
+    wh_stock, store_stock = load_stock(STOCK_CSV, master)
+    print(f"      倉庫WH: {len(wh_stock)} カラー / 店舗在庫: {len(store_stock)} カラー")
+    print(f"      倉庫WH 合計: {sum(wh_stock.values()):,}個 / 店舗在庫 合計: {sum(store_stock.values()):,}個")
+
+    # --- 3. 実績CSV読込 ---
+    print(f"\n[3/5] 実績CSVを自動検索・読み込み中...")
+    sales_path = find_latest_sales_csv()
+    print(f"      使用ファイル: {os.path.basename(sales_path)}")
+    sales_by_color, months_count = load_sales(sales_path)
+    progress_rate = CUMULATIVE_PROGRESS.get(months_count, 1.0)
+    print(f"      実績月数: {months_count} ヶ月 (進捗率: {progress_rate*100:.2f}%)")
+    print(f"      合計実績: {sum(sales_by_color.values()):,}個")
+
+    # --- 4. v6読込・スケール係数計算 ---
+    print(f"\n[4/5] v6ファイルを読み込み・スケール係数を計算中...")
+    wb = openpyxl.load_workbook(EXCEL_FILE)
+    ws = wb['全体サマリー']
+
+    scale, annual_fc, new_demand_total = calc_scale_factor(sales_by_color, months_count, ws)
+    print(f"      年間需要予測(実績ベース): {annual_fc:,.0f}個")
+    print(f"      6〜12月 新需要予測合計 : {new_demand_total:,.0f}個")
+    print(f"      スケール係数           : {scale:.4f}  ({(scale-1)*100:+.1f}%)")
+
+    # --- 5. v6へ書き込み ---
+    print(f"\n[5/5] v6「全体サマリー」シートを更新中...")
+    print(f"\n  {'カラー':<30} {'旧倉庫WH':>8} {'新倉庫WH':>8} {'旧店舗':>7} {'新店舗':>7} {'旧需要':>7} {'新需要':>7} {'新過不足':>9}")
+    print("  " + "-" * 93)
+
+    updated = 0
+    for row in ws.iter_rows(min_row=DATA_START, max_row=ws.max_row):
+        color_cell  = row[COL_COLOR  - 1]
+        wh_cell     = row[COL_WH     - 1]
+        store_cell  = row[COL_STORE  - 1]
+        supply_cell = row[COL_SUPPLY - 1]
+        demand_cell = row[COL_DEMAND - 1]
+        diff_cell   = row[COL_DIFF   - 1]
+
+        color = str(color_cell.value).strip() if color_cell.value else ''
+        if not color or color == '合計':
+            continue
+        if not isinstance(demand_cell.value, (int, float)):
+            continue
+
+        old_wh     = int(wh_cell.value)    if isinstance(wh_cell.value,    (int, float)) else 0
+        old_store  = int(store_cell.value)  if isinstance(store_cell.value,  (int, float)) else 0
+        old_demand = float(demand_cell.value)
+        supply     = float(supply_cell.value) if isinstance(supply_cell.value, (int, float)) else 0.0
+
+        # 在庫データにない場合は旧値を保持し、警告を出す
+        if color in wh_stock:
+            new_wh = wh_stock[color]
+        else:
+            new_wh = old_wh
+            print(f"  [情報] '{color}': 在庫一覧に倉庫データなし → 旧値 {old_wh:,} を保持")
+
+        if color in store_stock:
+            new_store = store_stock[color]
+        else:
+            new_store = old_store
+            print(f"  [情報] '{color}': 在庫一覧に店舗データなし → 旧値 {old_store:,} を保持")
+
+        new_demand = round(old_demand * scale)
+        new_diff   = round(supply - new_demand)
+
+        print(f"  {color:<30} {old_wh:>8,} {new_wh:>8,} {old_store:>7,} {new_store:>7,} {old_demand:>7,.0f} {new_demand:>7,} {new_diff:>+9,}")
+
+        wh_cell.value     = new_wh
+        store_cell.value  = new_store
+        demand_cell.value = new_demand
+        diff_cell.value   = new_diff
+        updated += 1
+
+    wb.save(EXCEL_FILE)
+    print("  " + "-" * 93)
+    print(f"\n✅ {updated} カラーを更新し、{EXCEL_FILE} を上書き保存しました。")
+    print("=" * 60)
+
+
+if __name__ == '__main__':
+    main()
