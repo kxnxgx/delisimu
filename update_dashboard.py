@@ -10,7 +10,7 @@ def generate_dashboard():
     print("Kankenダッシュボード生成を開始します...")
     
     # === 【設定エリア】 ===========================
-    SALES_RATIO = 135
+    SALES_RATIO = 158
     EXCEL_FILE = "Kanken23510_2026年版_v6.xlsx"
     OUTPUT_FILE = "Kanken_Dashboard_最新版.html"
     THRESHOLD_LARGE = -500 
