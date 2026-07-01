@@ -47,7 +47,20 @@ def generate_dashboard():
             else:
                 control_small.append({"name": name, "method": method})
                 
-        chart_df = df.sort_values('需要予測(6〜12月)', ascending=False).head(7)
+        # 指定された需要過多の4色
+        shortage_colors = ["Fog-Pink", "Pink", "Ox Red", "Sky Blue-Light Oak"]
+        
+        # 需要過多の4色のデータを抽出（指定順に並べ替え）
+        df_shortage = df[df['カラー'].isin(shortage_colors)]
+        df_shortage = df_shortage.set_index('カラー').reindex(shortage_colors).reset_index()
+        
+        # それ以外のカラーから、過不足がプラスで、プラス幅が大きい上位3色を抽出
+        df_surplus = df[~df['カラー'].isin(shortage_colors)]
+        df_surplus = df_surplus[df_surplus['過不足'] > 0].sort_values('過不足', ascending=False).head(3)
+        
+        # 4色と3色を合算してグラフ用データとする
+        chart_df = pd.concat([df_shortage, df_surplus]).dropna(subset=['カラー'])
+        
         chart_labels = chart_df['カラー'].tolist()
         chart_supply = chart_df['総供給(6月〜)'].fillna(0).astype(int).tolist()
         chart_demand = chart_df['需要予測(6〜12月)'].fillna(0).astype(int).tolist()
