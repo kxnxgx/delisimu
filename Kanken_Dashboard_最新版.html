@@ -37,18 +37,18 @@
         <!-- 共通KPIカード -->
         <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
             <div class="bg-white p-4 rounded-lg shadow-sm border border-slate-200 border-l-4 border-l-amber-500">
-                <p class="text-sm text-slate-500 font-medium">1〜5月 販売数昨対比</p>
+                <p class="text-sm text-slate-500 font-medium">1〜6月 販売数昨対比</p>
                 <div class="flex items-baseline mt-1">
                     <p class="text-3xl font-bold text-slate-800" x-text="kpi.sales_ratio"></p><span class="text-lg font-bold text-slate-800">%</span>
                     <p class="ml-2 text-xs text-amber-700 bg-amber-100 px-2 py-0.5 rounded-full">需要過熱</p>
                 </div>
             </div>
             <div class="bg-white p-4 rounded-lg shadow-sm border border-slate-200">
-                <p class="text-sm text-slate-500 font-medium">総供給見込み (6月〜)</p>
+                <p class="text-sm text-slate-500 font-medium">総供給見込み (7月〜)</p>
                 <p class="text-2xl font-bold text-slate-700 mt-1"><span x-text="kpi.total_supply.toLocaleString()"></span> <span class="text-sm font-normal text-slate-500">個</span></p>
             </div>
             <div class="bg-white p-4 rounded-lg shadow-sm border border-slate-200">
-                <p class="text-sm text-slate-500 font-medium">需要予測 (6〜12月)</p>
+                <p class="text-sm text-slate-500 font-medium">需要予測 (7〜12月)</p>
                 <p class="text-2xl font-bold text-slate-700 mt-1"><span x-text="kpi.total_demand.toLocaleString()"></span> <span class="text-sm font-normal text-slate-500">個</span></p>
             </div>
             <div :class="kpi.total_diff < 0 ? 'bg-red-50 border-l-red-500' : 'bg-emerald-50 border-l-emerald-500'" class="bg-white p-4 rounded-lg shadow-sm border border-slate-200 border-l-4">
@@ -73,7 +73,7 @@
                 </p>
             </div>
             <p class="text-slate-600 mb-6">
-                1〜5月の販売数は前年比<span x-text="kpi.sales_ratio" class="font-bold"></span>%と非常に高いお客様の需要を示していますが、皆様もご存知の通り、一部カラーで在庫切れが発生しており、供給が追いついていません。<br>
+                1〜6月の販売数は前年比<span x-text="kpi.sales_ratio" class="font-bold"></span>%と非常に高いお客様の需要を示していますが、皆様もご存知の通り、一部カラーで在庫切れが発生しており、供給が追いついていません。<br>
                 下半期はこの「圧倒的な品薄」と向き合い、目当ての色が無いお客様をいかに<b>「在庫に余裕のあるカラー（代替色）へご案内できるか」</b>が、店舗の売上を左右する最大の鍵になります。
             </p>
             <div class="w-full" style="height: 400px;">
