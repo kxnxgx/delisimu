@@ -168,8 +168,9 @@ def load_sales(path: str, master: dict) -> tuple:
 
     # 実績月数の算定（数量合計が1以上の月をカウント）
     if 'MTH' in df.columns:
-        monthly_sales = df.groupby('MTH')[qty_col].sum()
-        valid_months = [m for m, val in monthly_sales.items() if val > 0 and str(m).upper() in MONTH_MAP]
+        df['MTH_UPPER'] = df['MTH'].dropna().astype(str).str.upper()
+        monthly_sales = df.groupby('MTH_UPPER')[qty_col].sum()
+        valid_months = [m for m, val in monthly_sales.items() if val > 0 and m in MONTH_MAP]
         months_count = len(valid_months)
     else:
         months_count = 1
@@ -187,8 +188,8 @@ def calc_scale_factor(sales_by_color: dict, months_count: int, ws) -> tuple:
     progress_rate   = CUMULATIVE_PROGRESS.get(months_count, 1.0)
     total_actual    = sum(sales_by_color.values())
     annual_forecast = total_actual / progress_rate
-    future_rate     = 1.0 - progress_rate
-    new_6to12_demand = annual_forecast * future_rate
+    h2_rate         = 1.0 - CUMULATIVE_PROGRESS.get(5, 0.3968) # 60.32% (6〜12月需要比率)
+    new_6to12_demand = annual_forecast * h2_rate
 
     # 現行v6の需要予測合計を取得（スケール基準）
     old_demand_total = 0.0
@@ -289,8 +290,9 @@ def main():
         else:
             # エクセルの需要予測がゼロだった場合のフォールバック（実績からダイレクト計算）
             color_sales = sales_by_color.get(color, 0)
-            if progress_rate < 1.0 and progress_rate > 0:
-                new_demand = round(color_sales * ((1.0 - progress_rate) / progress_rate))
+            h2_rate = 1.0 - CUMULATIVE_PROGRESS.get(5, 0.3968) # 60.32%
+            if progress_rate > 0:
+                new_demand = round((color_sales / progress_rate) * h2_rate)
             else:
                 new_demand = 0
 
