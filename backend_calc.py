@@ -106,7 +106,10 @@ def main():
     # 月数の判定（欠落や異常値に備えた厳格化）
     if "MTH" in df_stores.columns:
         VALID_MONTHS = {'JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'}
-        actual_months_count = df_stores[df_stores["MTH"].isin(VALID_MONTHS)]["MTH"].nunique()
+        # 各月の売上合計を計算し、数量が0より大きい月のみ実績月数として数える
+        monthly_sales = df_stores.groupby('MTH')['数量'].sum()
+        valid_active_months = [m for m, val in monthly_sales.items() if val > 0 and str(m).upper() in VALID_MONTHS]
+        actual_months_count = len(valid_active_months)
     else:
         actual_months_count = 1
     

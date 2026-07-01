@@ -124,7 +124,7 @@ def load_stock(path: str, master: dict) -> tuple:
     return wh_stock, store_stock
 
 
-def load_sales(path: str) -> tuple:
+def load_sales(path: str, master: dict) -> tuple:
     """
     実績CSVからカラー別販売数の合計と実績月数を返す。
     Returns:
@@ -137,13 +137,6 @@ def load_sales(path: str) -> tuple:
         df = pd.read_csv(path, encoding='utf-8')
 
     # 列名のゆらぎ対応
-    if 'カラー' in df.columns:
-        color_col = 'カラー'
-    elif 'カラー名' in df.columns:
-        color_col = 'カラー名'
-    else:
-        raise ValueError("実績CSVに 'カラー' または 'カラー名' 列が見つかりません。")
-
     if '販売数' in df.columns:
         qty_col = '販売数'
     elif '数量' in df.columns:
@@ -151,14 +144,32 @@ def load_sales(path: str) -> tuple:
     else:
         raise ValueError("実績CSVに '販売数' または '数量' 列が見つかりません。")
 
-    df[color_col] = df[color_col].astype(str).str.strip()
-    df[qty_col]   = pd.to_numeric(df[qty_col], errors='coerce').fillna(0).clip(lower=0)
+    df[qty_col] = pd.to_numeric(df[qty_col], errors='coerce').fillna(0).clip(lower=0)
 
-    sales_by_color = df.groupby(color_col)[qty_col].sum().astype(int).to_dict()
+    # 品番または商品コード列の探索
+    code_col = None
+    for col in ['商品コード', '品番', '行ラベル']:
+        if col in df.columns:
+            code_col = col
+            break
 
-    # 実績月数の算定
+    if code_col is None:
+        raise ValueError("実績CSVに商品コードまたは品番を表す列が見つかりません。")
+
+    df['コードキー'] = df[code_col].astype(str).str.strip()
+    
+    # マスタでカラー名に変換
+    df['カラー名_マッピング済'] = df['コードキー'].map(master)
+
+    # Kanken(23510)以外のレコードも含まれるため、マッピングできた行のみを集計対象とする
+    kanken_df = df.dropna(subset=['カラー名_マッピング済'])
+
+    sales_by_color = kanken_df.groupby('カラー名_マッピング済')[qty_col].sum().astype(int).to_dict()
+
+    # 実績月数の算定（数量合計が1以上の月をカウント）
     if 'MTH' in df.columns:
-        valid_months = {m for m in df['MTH'].dropna().str.upper().unique() if m in MONTH_MAP}
+        monthly_sales = df.groupby('MTH')[qty_col].sum()
+        valid_months = [m for m, val in monthly_sales.items() if val > 0 and str(m).upper() in MONTH_MAP]
         months_count = len(valid_months)
     else:
         months_count = 1
@@ -190,9 +201,10 @@ def calc_scale_factor(sales_by_color: dict, months_count: int, ws) -> tuple:
             old_demand_total += float(demand_cell.value)
 
     if old_demand_total == 0:
-        raise ZeroDivisionError("v6の需要予測合計がゼロです。ファイルを確認してください。")
-
-    scale = new_6to12_demand / old_demand_total
+        print("  [情報] v6エクセルの旧需要予測合計がゼロです。実績ベースの直接算出に切り替えます。")
+        scale = None
+    else:
+        scale = new_6to12_demand / old_demand_total
     return scale, annual_forecast, new_6to12_demand
 
 
@@ -216,7 +228,7 @@ def main():
     print(f"\n[3/5] 実績CSVを自動検索・読み込み中...")
     sales_path = find_latest_sales_csv()
     print(f"      使用ファイル: {os.path.basename(sales_path)}")
-    sales_by_color, months_count = load_sales(sales_path)
+    sales_by_color, months_count = load_sales(sales_path, master)
     progress_rate = CUMULATIVE_PROGRESS.get(months_count, 1.0)
     print(f"      実績月数: {months_count} ヶ月 (進捗率: {progress_rate*100:.2f}%)")
     print(f"      合計実績: {sum(sales_by_color.values()):,}個")
@@ -229,7 +241,10 @@ def main():
     scale, annual_fc, new_demand_total = calc_scale_factor(sales_by_color, months_count, ws)
     print(f"      年間需要予測(実績ベース): {annual_fc:,.0f}個")
     print(f"      6〜12月 新需要予測合計 : {new_demand_total:,.0f}個")
-    print(f"      スケール係数           : {scale:.4f}  ({(scale-1)*100:+.1f}%)")
+    if scale is not None:
+        print(f"      スケール係数           : {scale:.4f}  ({(scale-1)*100:+.1f}%)")
+    else:
+        print(f"      スケール係数           : 適用不可 (エクセル側需要予測が0のためダイレクト計算を実行)")
 
     # --- 5. v6へ書き込み ---
     print(f"\n[5/5] v6「全体サマリー」シートを更新中...")
@@ -269,7 +284,16 @@ def main():
             new_store = old_store
             print(f"  [情報] '{color}': 在庫一覧に店舗データなし → 旧値 {old_store:,} を保持")
 
-        new_demand = round(old_demand * scale)
+        if scale is not None:
+            new_demand = round(old_demand * scale)
+        else:
+            # エクセルの需要予測がゼロだった場合のフォールバック（実績からダイレクト計算）
+            color_sales = sales_by_color.get(color, 0)
+            if progress_rate < 1.0 and progress_rate > 0:
+                new_demand = round(color_sales * ((1.0 - progress_rate) / progress_rate))
+            else:
+                new_demand = 0
+
         new_diff   = round(supply - new_demand)
 
         print(f"  {color:<30} {old_wh:>8,} {new_wh:>8,} {old_store:>7,} {new_store:>7,} {old_demand:>7,.0f} {new_demand:>7,} {new_diff:>+9,}")
