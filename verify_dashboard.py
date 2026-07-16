@@ -35,9 +35,13 @@ def verify_dashboard_data():
     df = df.dropna(subset=['カラー'])
     df = df[df['カラー'] != '合計'] # 合計行を除外
     
+    cols = df.columns.tolist()
+    supply_col = next((c for c in cols if "総供給" in c), "総供給(6月〜)")
+    demand_col = next((c for c in cols if "需要予測" in c), "需要予測(6〜12月)")
+    
     # 3. KPIの計算と検証
-    total_supply = int(df['総供給(6月〜)'].sum())
-    total_demand = int(df['需要予測(6〜12月)'].sum())
+    total_supply = int(df[supply_col].sum())
+    total_demand = int(df[demand_col].sum())
     total_diff = int(df['過不足'].sum())
     
     print("=== 1. KPIの検証 ===")

@@ -54,6 +54,7 @@ def main():
     
     cols = df_kanken.columns.tolist()
     stock_col = next((c for c in cols if "倉庫WH" in c or "倉庫" in c), "6/1倉庫WH")
+    demand_col = next((c for c in cols if " need予測" in c or "需要予測" in c), "需要予測(6〜12月)")
     
     stock_date = "6月1日" # デフォルト
     m = re.search(r"(\d{1,2}/\d{1,2})", stock_col)
@@ -66,7 +67,7 @@ def main():
         stock_col: "倉庫在庫",
         "店舗在庫": "店舗在庫",
         "FW入荷": "FW入荷予定",
-        "需要予測(6〜12月)": "残り需要予測"
+        demand_col: "残り需要予測"
     }
     
     available_cols = [c for c in kanken_cols.keys() if c in df_kanken.columns]

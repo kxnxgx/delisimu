@@ -22,13 +22,17 @@ def generate_dashboard():
         df.columns = df.columns.astype(str).str.replace('\n', '', regex=False).str.strip()
         df = df.dropna(subset=['カラー'])
         df = df[df['カラー'] != '合計'] 
+        
+        cols = df.columns.tolist()
+        supply_col = next((c for c in cols if "総供給" in c), "総供給(6月〜)")
+        demand_col = next((c for c in cols if "需要予測" in c), "需要予測(6〜12月)")
     except Exception as e:
         print(f"【エラー】Excelファイルの読み込み中にエラーが発生しました。\n詳細: {e}")
         return
 
     try:
-        total_supply = int(df['総供給(6月〜)'].sum())
-        total_demand = int(df['需要予測(6〜12月)'].sum())
+        total_supply = int(df[supply_col].sum())
+        total_demand = int(df[demand_col].sum())
         total_diff = int(df['過不足'].sum())
         
         priority = []
@@ -62,8 +66,8 @@ def generate_dashboard():
         chart_df = pd.concat([df_shortage, df_surplus]).dropna(subset=['カラー'])
         
         chart_labels = chart_df['カラー'].tolist()
-        chart_supply = chart_df['総供給(6月〜)'].fillna(0).astype(int).tolist()
-        chart_demand = chart_df['需要予測(6〜12月)'].fillna(0).astype(int).tolist()
+        chart_supply = chart_df[supply_col].fillna(0).astype(int).tolist()
+        chart_demand = chart_df[demand_col].fillna(0).astype(int).tolist()
         
         injected_data = {
             "kpi": {
