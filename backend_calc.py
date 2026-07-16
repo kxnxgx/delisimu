@@ -5,10 +5,10 @@ import re
 import glob
 
 # ファイルパス（固定のもの）
-FILE_KANKEN = r"C:\Users\kesuzuki\Desktop\シミュ２\Kanken23510_2026年版_v6.xlsx"
-FILE_BUNPAI = r"C:\Users\kesuzuki\Desktop\シミュ２\分配店舗向け.xlsx"
-OUTPUT_CSV  = r"C:\Users\kesuzuki\Desktop\シミュ２\検証用_統合データ.csv"
-OUTPUT_JSON = r"C:\Users\kesuzuki\Desktop\シミュ２\dashboard_data.json"
+FILE_KANKEN = "Kanken23510_2026年版_v6.xlsx"
+FILE_BUNPAI = "分配店舗向け.xlsx"
+OUTPUT_CSV  = "検証用_統合データ.csv"
+OUTPUT_JSON = "dashboard_data.json"
 
 def find_latest_sales_csv() -> str:
     """フォルダ内の *実績.csv を探し、更新日時が最新のファイルパスを返す。"""
@@ -99,9 +99,18 @@ def main():
     # 列名のゆらぎ対応（数量 / 販売数）
     if '数量' not in df_stores.columns and '販売数' in df_stores.columns:
         df_stores = df_stores.rename(columns={'販売数': '数量'})
-    # 列名のゆらぎ対応（商品コード / 行ラベル → 品番として使用）
-    if '品番' not in df_stores.columns and '行ラベル' in df_stores.columns:
-        df_stores = df_stores.rename(columns={'行ラベル': '品番'})
+    # 列名のゆらぎ対応（商品コード / 行ラベル / 3rd Item No. → 品番として使用）
+    if '品番' not in df_stores.columns:
+        for col in ['行ラベル', '3rd Item No.']:
+            if col in df_stores.columns:
+                df_stores = df_stores.rename(columns={col: '品番'})
+                break
+
+    # 営業日付からMTH列を自動生成
+    if 'MTH' not in df_stores.columns and '営業日付' in df_stores.columns:
+        df_stores['営業日付_dt'] = pd.to_datetime(df_stores['営業日付'], errors='coerce')
+        month_map_rev = {1: 'JAN', 2: 'FEB', 3: 'MAR', 4: 'APR', 5: 'MAY', 6: 'JUN', 7: 'JUL', 8: 'AUG', 9: 'SEP', 10: 'OCT', 11: 'NOV', 12: 'DEC'}
+        df_stores['MTH'] = df_stores['営業日付_dt'].dt.month.map(month_map_rev)
         
     # 月数の判定（欠落や異常値に備えた厳格化）
     if "MTH" in df_stores.columns:
@@ -175,9 +184,23 @@ def main():
     df_merged = df_merged[(df_merged["累計実績(販売数)"] > 0) | (df_merged["FW入荷予定"] > 0) | (df_merged["期首在庫"] > 0)]
 
     # --- 6. 店舗別構成比（ベースシェア）の算出 ---
+    if '拠点' not in df_stores.columns and '店舗名称' in df_stores.columns:
+        df_stores['拠点'] = df_stores['店舗名称']
+
     df_stores["拠点"] = df_stores["拠点"].replace({
+        "FJALLRAVEN by 3NITY 大丸心斎橋": "大丸心斎橋",
+        "FJALLRAVEN by 3NITY 京王新宿": "京王新宿",
+        "FJALLRAVEN by 3NITY玉川高島屋S・C": "玉川高島屋",
+        "FJALLRAVEN by 3NITY TOKYO": "TOKYO(原宿)",
+        "FJALLRAVEN by 3NITY SAPPORO HUTTE": "札幌",
+        "FJALLRAVEN STORE 名古屋ファッションワン": "名古屋",
+        "FJALLRAVEN by 3NITY TOKYO NODE": "TOKYO NODE",
+        "FJALLRAVEN POPUP NARITA": "成田",
+        "FJALLRAVEN by 3NITY 心斎橋パルコ": "心斎橋パルコ",
+        "FJALLRAVEN by 3NITY ルクア大阪": "ルクア大阪",
+        "FJALLRAVEN POP-UP": "POP-UP",
+        "FJALLRAVEN by 3NITY POPUP": "POP-UP",
         "越一": "TOKYO NODE",
-        "心斎橋パルコ": "大丸心斎橋",
         "FLAGS": "NARITA(FLAGS)"
     })
     
@@ -216,7 +239,7 @@ def main():
         }
     }
     
-    OUTPUT_JS = r"C:\Users\kesuzuki\Desktop\シミュ２\dashboard_data.js"
+    OUTPUT_JS = "dashboard_data.js"
     with open(OUTPUT_JS, "w", encoding="utf-8") as f:
         js_content = "const dashboardData = " + json.dumps(output_data, ensure_ascii=False, indent=2) + ";"
         f.write(js_content)

@@ -148,7 +148,7 @@ def load_sales(path: str, master: dict) -> tuple:
 
     # 品番または商品コード列の探索
     code_col = None
-    for col in ['商品コード', '品番', '行ラベル']:
+    for col in ['商品コード', '品番', '行ラベル', '3rd Item No.']:
         if col in df.columns:
             code_col = col
             break
@@ -165,6 +165,12 @@ def load_sales(path: str, master: dict) -> tuple:
     kanken_df = df.dropna(subset=['カラー名_マッピング済'])
 
     sales_by_color = kanken_df.groupby('カラー名_マッピング済')[qty_col].sum().astype(int).to_dict()
+
+    # 営業日付からMTH列を自動生成
+    if 'MTH' not in df.columns and '営業日付' in df.columns:
+        df['営業日付_dt'] = pd.to_datetime(df['営業日付'], errors='coerce')
+        month_map_rev = {1: 'JAN', 2: 'FEB', 3: 'MAR', 4: 'APR', 5: 'MAY', 6: 'JUN', 7: 'JUL', 8: 'AUG', 9: 'SEP', 10: 'OCT', 11: 'NOV', 12: 'DEC'}
+        df['MTH'] = df['営業日付_dt'].dt.month.map(month_map_rev)
 
     # 実績月数の算定（数量合計が1以上の月をカウント）
     if 'MTH' in df.columns:
@@ -236,6 +242,9 @@ def main():
 
     # --- 4. v6読込・スケール係数計算 ---
     print(f"\n[4/5] v6ファイルを読み込み・スケール係数を計算中...")
+    if not os.path.exists(EXCEL_FILE):
+        print(f"  [デバッグ] カレントディレクトリ: {os.getcwd()}")
+        print(f"  [デバッグ] フォルダ内のファイル一覧: {os.listdir('.')}")
     wb = openpyxl.load_workbook(EXCEL_FILE)
     ws = wb['全体サマリー']
 

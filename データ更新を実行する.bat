@@ -1,4 +1,5 @@
-@echo off
+﻿@echo off
+cd /d "%~dp0"
 chcp 65001 > nul
 set PYTHONIOENCODING=utf-8
 
@@ -6,12 +7,12 @@ echo ==================================================
 echo  Kanken 出荷計画 - データ一括更新
 echo ==================================================
 echo.
-echo [Step 1/3] v6 在庫・需要予測を更新中...
+echo [Step 1/3] 全体サマリー再構築中 (build_summary.py)...
 echo --------------------------------------------------
-python update_v6.py
+python build_summary.py
 if %errorlevel% neq 0 (
     echo.
-    echo [エラー] update_v6.py が失敗しました。処理を中断します。
+    echo [エラー] build_summary.py が失敗しました。処理を中断します。
     pause
     exit /b 1
 )
